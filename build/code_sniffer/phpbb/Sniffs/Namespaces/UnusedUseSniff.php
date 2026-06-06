@@ -295,14 +295,34 @@ class UnusedUseSniff implements Sniff
 		{
 			$old_catch = $catch;
 
-			$caught_class_name_start = $phpcsFile->findNext($this->getNameTokens(), $catch + 1);
-			$caught_class_name_end = $phpcsFile->findNext(self::FIND, $caught_class_name_start + 1, null, true);
-
-			$caught_class_name = trim($phpcsFile->getTokensAsString($caught_class_name_start, ($caught_class_name_end - $caught_class_name_start)));
-
-			if (!empty($caught_class_name))
+			// Find the opening parenthesis of the catch clause to use as a boundary.
+			$open_paren = $phpcsFile->findNext(T_OPEN_PARENTHESIS, $catch + 1);
+			if ($open_paren === false || !isset($tokens[$open_paren]['parenthesis_closer']))
 			{
-				$ok = $this->check($phpcsFile, $caught_class_name, $class_name_full, $class_name_short, $catch) || $ok;
+				continue;
+			}
+			$close_paren = $tokens[$open_paren]['parenthesis_closer'];
+
+			// Iterate over all exception class names within the catch parentheses.
+			// Multiple classes may be separated by | for multi-catch (e.g. catch (A|B $e)).
+			$search_pos = $open_paren;
+			while (($caught_class_name_start = $phpcsFile->findNext($this->getNameTokens(), $search_pos + 1, $close_paren)) !== false)
+			{
+				$caught_class_name_end = $phpcsFile->findNext(self::FIND, $caught_class_name_start + 1, $close_paren, true);
+				if ($caught_class_name_end === false)
+				{
+					$caught_class_name_end = $close_paren;
+				}
+
+				$caught_class_name = trim($phpcsFile->getTokensAsString($caught_class_name_start, ($caught_class_name_end - $caught_class_name_start)));
+
+				if (!empty($caught_class_name))
+				{
+					$ok = $this->check($phpcsFile, $caught_class_name, $class_name_full, $class_name_short, $catch) || $ok;
+				}
+
+				// Advance past the extracted name so the next iteration finds the next class.
+				$search_pos = $caught_class_name_end;
 			}
 		}
 

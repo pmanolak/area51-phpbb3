@@ -20,6 +20,26 @@ class phpbb_notification_manager_mark_by_id_test extends phpbb_tests_notificatio
 		return $this->createXMLDataSet(__DIR__ . '/fixtures/notification.xml');
 	}
 
+	public function setUp(): void
+	{
+		parent::setUp();
+
+		if (strpos($this->get_database_config()['dbms'], 'mssql') !== false)
+		{
+			$this->db->sql_query('SET IDENTITY_INSERT phpbb_notification_types ON;');
+		}
+	}
+
+	public function tearDown(): void
+	{
+		if (strpos($this->get_database_config()['dbms'], 'mssql') !== false)
+		{
+			$this->db->sql_query('SET IDENTITY_INSERT phpbb_notification_types OFF;');
+		}
+
+		parent::tearDown();
+	}
+
 	/**
 	* Test mark_notifications_by_id with a single notification ID
 	*/
