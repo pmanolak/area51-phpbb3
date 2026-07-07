@@ -11,6 +11,7 @@
 *
 */
 
+use OAuth\Common\Consumer\Credentials;
 use OAuth\OAuth2\Token\StdOAuth2Token;
 use phpbb\auth\provider\oauth\token_storage;
 
@@ -291,21 +292,28 @@ class phpbb_auth_provider_oauth_token_storage_test extends phpbb_database_test_c
 
 		$this->token_storage->clearAuthorizationState($this->service_name);
 		$this->assertFalse($this->token_storage->hasAuthorizationState($this->service_name));
-		$this->assertNull($this->token_storage->retrieveAuthorizationState($this->service_name));
+		$this->expectException(\OAuth\Common\Storage\Exception\AuthorizationStateNotFoundException::class);
+		$this->token_storage->retrieveAuthorizationState($this->service_name);
 	}
 
 	public function test_retrieve_not_stored_state()
 	{
+		$this->expectException(\OAuth\Common\Storage\Exception\AuthorizationStateNotFoundException::class);
 		$result = $this->token_storage->retrieveAuthorizationState($this->service_name);
-		$this->assertNull($result);
 	}
 
 	public function test_validate_authorization_state_invalid()
 	{
-		$google_service = $this->getMockBuilder(\OAuth\OAuth2\Service\Google::class)
-			->setMethodsExcept(['requestAccessToken'])
-			->disableOriginalConstructor()
-			->getMock();
+		$credentials = new Credentials(
+			'my_key',
+			'my_secret',
+			'http://example.com/callback'
+		);
+		$google_service = new \OAuth\OAuth2\Service\Google(
+			$credentials,
+			$this->createMock(\OAuth\Common\Http\Client\ClientInterface::class),
+			$this->token_storage
+		);
 		$google_reflection = new \ReflectionClass($google_service);
 		$storage = $google_reflection->getProperty('storage');
 		$storage->setAccessible(true);

@@ -97,9 +97,10 @@ class phpbb_migrator_revert_data_merge_test extends phpbb_test_case
 				'php',
 				'phpbb_',
 				[],
+				[],
 				new helper(),
 			])
-			->setMethods(['load_migration_state', 'set_migration_state', 'process_data_step', 'get_migration'])
+			->onlyMethods(['load_migration_state', 'set_migration_state', 'process_data_step', 'get_migration'])
 			->getMock();
 
 		$migrator->method('load_migration_state')->willReturn(null);

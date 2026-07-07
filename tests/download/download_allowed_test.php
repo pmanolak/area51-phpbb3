@@ -15,10 +15,13 @@ use phpbb\db\driver\driver_interface;
 use phpbb\request\request_interface;
 use phpbb\user;
 
-require_once __DIR__ . '/../../phpBB/includes/functions_download.php';
-
 class phpbb_download_download_allowed_test extends phpbb_test_case
 {
+	/** @var \phpbb\storage\controller\attachment */
+	private $attachment_controller;
+
+	private $config;
+
 	/** @var driver_interface */
 	private $db;
 
@@ -30,15 +33,19 @@ class phpbb_download_download_allowed_test extends phpbb_test_case
 
 	protected function setUp(): void
 	{
-		$this->request = new phpbb_mock_request();
-
-		$this->user = new phpbb_mock_user();
+		$this->request = $this->getMockBuilder('phpbb\request\request')
+			->disableOriginalConstructor()
+			->getMock();
 
 		$this->db = $this->getMockBuilder('phpbb\db\driver\driver')
 			->disableOriginalConstructor()
 			->getMock();
 		$this->db->method('sql_query')->willReturn(null);
 		$this->db->method('sql_freeresult')->willReturn(null);
+		$language = $this->getMockBuilder('phpbb\language\language')
+			->disableOriginalConstructor()
+			->getMock();
+		$this->user = new \phpbb\user($language, '\phpbb\datetime');
 	}
 
 	public static function download_allowed_data(): array
@@ -385,8 +392,6 @@ class phpbb_download_download_allowed_test extends phpbb_test_case
 	 */
 	public function test_download_allowed(array $config_vars, $referer, $host, array $db_rows, $expected, $message)
 	{
-		global $config, $db, $request, $user;
-
 		// Build the sequence of sql_fetchrow return values: each row followed
 		// by false to terminate the while loop.
 		$fetchrow_sequence = array_merge($db_rows, [false]);
@@ -402,16 +407,54 @@ class phpbb_download_download_allowed_test extends phpbb_test_case
 				->will($this->onConsecutiveCalls(...$fetchrow_sequence));
 		}
 
-		$this->request->set_header('Referer', $referer);
+		$this->request->method('header')->willReturnCallback(function ($key) use ($referer) {
+			if ($key === 'Referer')
+			{
+				return $referer;
+			}
+			return null;
+		});
 		$this->user->host = $host;
 
-		// Set globals
-		$config = $config_vars;
-		$db = $this->db;
-		$request = $this->request;
-		$user = $this->user;
+		$cache_service = $this->getMockBuilder('phpbb\cache\service')
+			->disableOriginalConstructor()
+			->getMock();
+		$this->config = new \phpbb\config\config($config_vars);
+		$content_visibility = $this->getMockBuilder('phpbb\content_visibility')
+			->disableOriginalConstructor()
+			->getMock();
+		$extension_guesser = $this->getMockBuilder('phpbb\mimetype\extension_guesser')
+			->disableOriginalConstructor()
+			->getMock();
+		$storage = $this->getMockBuilder('phpbb\storage\storage')
+			->disableOriginalConstructor()
+			->getMock();
+		$symfony_request = $this->getMockBuilder('phpbb\symfony_request')
+			->disableOriginalConstructor()
+			->getMock();
+		$language = $this->getMockBuilder('phpbb\language\language')
+			->disableOriginalConstructor()
+			->getMock();
 
-		$result = download_allowed();
+		$this->attachment_controller = new \phpbb\storage\controller\attachment(
+			new \phpbb\auth\auth(),
+			$cache_service,
+			$this->config,
+			$content_visibility,
+			$this->db,
+			new phpbb_mock_event_dispatcher(),
+			$extension_guesser,
+			$language,
+			$this->request,
+			$storage,
+			$symfony_request,
+			$this->user
+		);
+
+		$controller_reflection = new \ReflectionClass($this->attachment_controller);
+		$method_reflection = $controller_reflection->getMethod('download_allowed');
+		$method_reflection->setAccessible(true);
+		$result = $method_reflection->invoke($this->attachment_controller);
 		$this->assertEquals($expected, $result, $message);
 	}
 }
